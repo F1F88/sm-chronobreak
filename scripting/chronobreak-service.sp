@@ -11,7 +11,7 @@
 
 #define PLUGIN_NAME        "EkkoChronobreak"
 #define PLUGIN_DESCRIPTION "Ekko Abilitie Chronobreak"
-#define PLUGIN_VERSION     "1.0.0"
+#define PLUGIN_VERSION     "1.0.1"
 
 public Plugin myinfo =
 {
@@ -25,6 +25,7 @@ public Plugin myinfo =
 #define private             /**/
 #define NMR_MAXPLAYERS      9
 
+
 enum ForwardList
 {
     Fwd_DisablePost,
@@ -34,6 +35,9 @@ enum ForwardList
 
     Fwd_Total
 }
+
+GlobalForward       g_forwards[Fwd_Total];
+
 
 /**
  * 玩家回溯时需要使用到的位置、角度等数据
@@ -45,228 +49,6 @@ enum struct BacktrackingData
     int     m_iHealth;
     float   m_flStamina;
     bool    _bleedingOut;
-}
-
-
-GlobalForward       g_forwards[Fwd_Total];
-ChronobreakMachine  g_chronobreakPool[NMR_MAXPLAYERS + 1];
-
-
-public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
-{
-    CreateNative("Chronobreak.GetState",            Native_Chronobreak_GetState);
-    CreateNative("Chronobreak.GetUseTime",          Native_Chronobreak_GetUseTime);
-    CreateNative("Chronobreak.GetPastTime",         Native_Chronobreak_GetPastTime);
-    CreateNative("Chronobreak.GetChargingProgress", Native_Chronobreak_GetChargingProgress);
-    CreateNative("Chronobreak.GetlUseProgress",     Native_Chronobreak_GetlUseProgress);
-    CreateNative("Chronobreak.Disable",             Native_Chronobreak_Disable);
-    CreateNative("Chronobreak.Enable",              Native_Chronobreak_Enable);
-    CreateNative("Chronobreak.Use",                 Native_Chronobreak_Use);
-
-    g_forwards[Fwd_DisablePost] = new GlobalForward("OnChronobreakDisablePost", ET_Ignore, Param_Cell, Param_Cell);
-    g_forwards[Fwd_EnablePost]  = new GlobalForward("OnChronobreakEnablePost",  ET_Ignore, Param_Cell);
-    g_forwards[Fwd_ReadyPost]   = new GlobalForward("OnChronobreakReadyPost",   ET_Ignore, Param_Cell);
-    g_forwards[Fwd_UsePost]     = new GlobalForward("OnChronobreakUsePost",     ET_Ignore, Param_Cell);
-
-    RegPluginLibrary("chronobreak");
-
-    return APLRes_Success;
-}
-
-public void OnPluginStart()
-{
-    HookEvent("player_death",       Event_PlayerDeath);
-    HookEvent("nmrih_reset_map",    Event_ResetMap);
-}
-
-public void OnGameFrame()
-{
-    for(int index = 1; index <= MaxClients; ++index)
-    {
-        ChronobreakState state = g_chronobreakPool[index].GetState();
-        switch (state)
-        {
-            case ChronobreakState_Disabled:
-            {
-                continue;
-            }
-            case ChronobreakState_Charging:
-            {
-                g_chronobreakPool[index].Charge();
-            }
-            case ChronobreakState_Ready:
-            {
-                g_chronobreakPool[index].Charge();
-            }
-            case ChronobreakState_InUse:
-            {
-                g_chronobreakPool[index].Use();
-            }
-            default:
-            {
-                ThrowError("Unknown state. (%d)", state);
-            }
-        }
-    }
-}
-
-public void OnClientDisconnect(int client)
-{
-    if (client > 0 && client < sizeof(g_chronobreakPool))
-    {
-        g_chronobreakPool[client].Disable(ChronobreakReason_ClientDisconnect);
-    }
-}
-
-private void Event_PlayerDeath(Event event, char[] name, bool dontBroadcast)
-{
-    int client = GetClientOfUserId(event.GetInt("userid"));
-    if (client > 0 && client < sizeof(g_chronobreakPool))
-    {
-        g_chronobreakPool[client].Disable(ChronobreakReason_ClientDeath);
-    }
-}
-
-private void Event_ResetMap(Event event, char[] name, bool dontBroadcast)
-{
-    for(int index = 0; index < sizeof(g_chronobreakPool); ++index)
-    {
-        g_chronobreakPool[index].Disable(ChronobreakReason_MapReset);
-    }
-}
-
-
-
-private any Native_Chronobreak_GetState(Handle plugin, int numParams)
-{
-    int client = GetNativeCell(1);
-    if (client <= 0 || client >= sizeof(g_chronobreakPool) || !IsClientInGame(client))
-    {
-        ThrowNativeError(SP_ERROR_PARAM, "Invalid client %d.", client);
-    }
-
-    return g_chronobreakPool[client].GetState();
-}
-
-private any Native_Chronobreak_GetUseTime(Handle plugin, int numParams)
-{
-    int client = GetNativeCell(1);
-    if (client <= 0 || client >= sizeof(g_chronobreakPool) || !IsClientInGame(client))
-    {
-        ThrowNativeError(SP_ERROR_PARAM, "Invalid client %d.", client);
-    }
-
-    return g_chronobreakPool[client].GetUseTime();
-}
-
-// private int Native_Chronobreak_GetIntervalBit(Handle plugin, int numParams)
-// {
-//     int client = GetNativeCell(1);
-//     if (client <= 0 || client >= sizeof(g_chronobreakPool) || !IsClientInGame(client))
-//     {
-//         ThrowNativeError(SP_ERROR_PARAM, "Invalid client %d.", client);
-//     }
-
-//     return g_chronobreakPool[client].GetIntervalBit();
-// }
-
-private any Native_Chronobreak_GetPastTime(Handle plugin, int numParams)
-{
-    int client = GetNativeCell(1);
-    if (client <= 0 || client >= sizeof(g_chronobreakPool) || !IsClientInGame(client))
-    {
-        ThrowNativeError(SP_ERROR_PARAM, "Invalid client %d.", client);
-    }
-
-    return g_chronobreakPool[client].GetPastTime();
-}
-
-private any Native_Chronobreak_GetChargingProgress(Handle plugin, int numParams)
-{
-    int client = GetNativeCell(1);
-    if (client <= 0 || client >= sizeof(g_chronobreakPool) || !IsClientInGame(client))
-    {
-        ThrowNativeError(SP_ERROR_PARAM, "Invalid client %d.", client);
-    }
-
-    return g_chronobreakPool[client].GetChargingProgress();
-}
-
-private any Native_Chronobreak_GetlUseProgress(Handle plugin, int numParams)
-{
-    int client = GetNativeCell(1);
-    if (client <= 0 || client >= sizeof(g_chronobreakPool) || !IsClientInGame(client))
-    {
-        ThrowNativeError(SP_ERROR_PARAM, "Invalid client %d.", client);
-    }
-
-    return g_chronobreakPool[client].GetlUseProgress();
-}
-
-private void Native_Chronobreak_Disable(Handle plugin, int numParams)
-{
-    int client = GetNativeCell(1);
-    if (client <= 0 || client >= sizeof(g_chronobreakPool) || !IsClientInGame(client))
-        ThrowNativeError(SP_ERROR_PARAM, "Invalid client %d.", client);
-
-    g_chronobreakPool[client].Disable(ChronobreakReason_CallDisable);
-}
-
-private void Native_Chronobreak_Enable(Handle plugin, int numParams)
-{
-    int client = GetNativeCell(1);
-    if (!IsValidClient(client))
-        ThrowNativeError(SP_ERROR_PARAM, "Invalid client %d.", client);
-
-    if (!IsPlayerAlive(client))
-        ThrowNativeError(SP_ERROR_PARAM, "Client %d is dead.", client);
-
-    if (g_chronobreakPool[client].GetState() != ChronobreakState_Disabled)
-        ThrowNativeError(SP_ERROR_INVALID_INSTRUCTION, "Not in disabled state. (%d)", g_chronobreakPool[client].GetState());
-
-    // float useTime = GetNativeCell(2);
-    // if (FloatCompare(useTime, GetTickInterval()) == -1)
-    //     ThrowNativeError(SP_ERROR_PARAM, "Invalid useTime. (%f)", useTime);
-
-    int factor = GetNativeCell(2);
-    if (factor <= 0)
-        ThrowNativeError(SP_ERROR_PARAM, "Invalid factor. (%d)", factor);
-
-    g_chronobreakPool[client].Enable(client, factor);
-}
-
-private void Native_Chronobreak_Use(Handle plugin, int numParams)
-{
-    int client = GetNativeCell(1);
-    if (client <= 0 || client >= sizeof(g_chronobreakPool) || !IsClientInGame(client))
-    {
-        ThrowNativeError(SP_ERROR_PARAM, "invalid client %d.", client);
-    }
-
-    ChronobreakState state = g_chronobreakPool[client].GetState();
-    switch (state)
-    {
-        case ChronobreakState_Disabled:
-        {
-            ThrowNativeError(SP_ERROR_INVALID_INSTRUCTION, "Disabled.");
-        }
-        case ChronobreakState_Charging:
-        {
-            ThrowNativeError(SP_ERROR_INVALID_INSTRUCTION, "Not yet ready.");
-        }
-        case ChronobreakState_Ready:
-        {
-            g_chronobreakPool[client].Use();
-        }
-        case ChronobreakState_InUse:
-        {
-            ThrowNativeError(SP_ERROR_INVALID_INSTRUCTION, "In using.");
-        }
-        default:
-        {
-            ThrowNativeError(SP_ERROR_NATIVE, "Unknown state. (%d)", state);
-        }
-    }
 }
 
 
@@ -497,7 +279,7 @@ enum struct ChronobreakMachine
             {
                 this.state = ChronobreakState_InUse; // 标记技能正在释放
 
-                NMR_Player player = NMR_Player(client); // 如果玩家感染了，延长他因感染死亡的时间
+                NMR_Player player = NMR_Player(client); // 延长因感染死亡的时间
                 if (player.IsInfected())
                     player.TakePillsInner();
 
@@ -518,7 +300,7 @@ enum struct ChronobreakMachine
                 player._bleedingOut = data._bleedingOut;
                 TeleportEntity(client, data.origin, data.angles, NULL_VECTOR);
 
-                if (index == 0)
+                if (index == 0) // 技能释放完毕
                 {
                     this.Disable(ChronobreakReason_UseEnd);
                 }
@@ -532,6 +314,225 @@ enum struct ChronobreakMachine
 }
 
 
+ChronobreakMachine  g_chronobreakPool[NMR_MAXPLAYERS + 1];
+
+
+public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
+{
+    CreateNative("Chronobreak.GetState",            Native_Chronobreak_GetState);
+    CreateNative("Chronobreak.GetUseTime",          Native_Chronobreak_GetUseTime);
+    CreateNative("Chronobreak.GetPastTime",         Native_Chronobreak_GetPastTime);
+    CreateNative("Chronobreak.GetChargingProgress", Native_Chronobreak_GetChargingProgress);
+    CreateNative("Chronobreak.GetlUseProgress",     Native_Chronobreak_GetlUseProgress);
+    CreateNative("Chronobreak.Disable",             Native_Chronobreak_Disable);
+    CreateNative("Chronobreak.Enable",              Native_Chronobreak_Enable);
+    CreateNative("Chronobreak.Use",                 Native_Chronobreak_Use);
+
+    g_forwards[Fwd_DisablePost] = new GlobalForward("OnChronobreakDisablePost", ET_Ignore, Param_Cell, Param_Cell);
+    g_forwards[Fwd_EnablePost]  = new GlobalForward("OnChronobreakEnablePost",  ET_Ignore, Param_Cell);
+    g_forwards[Fwd_ReadyPost]   = new GlobalForward("OnChronobreakReadyPost",   ET_Ignore, Param_Cell);
+    g_forwards[Fwd_UsePost]     = new GlobalForward("OnChronobreakUsePost",     ET_Ignore, Param_Cell);
+
+    RegPluginLibrary("chronobreak");
+
+    return APLRes_Success;
+}
+
+public void OnPluginStart()
+{
+    HookEvent("player_death",       Event_PlayerDeath);
+    HookEvent("nmrih_reset_map",    Event_ResetMap);
+}
+
+public void OnGameFrame()
+{
+    for(int index = 1; index <= MaxClients; ++index)
+    {
+        ChronobreakState state = g_chronobreakPool[index].GetState();
+        switch (state)
+        {
+            case ChronobreakState_Disabled:
+            {
+                continue;
+            }
+            case ChronobreakState_Charging:
+            {
+                g_chronobreakPool[index].Charge();
+            }
+            case ChronobreakState_Ready:
+            {
+                g_chronobreakPool[index].Charge();
+            }
+            case ChronobreakState_InUse:
+            {
+                g_chronobreakPool[index].Use();
+            }
+            default:
+            {
+                ThrowError("Unknown state. (%d)", state);
+            }
+        }
+    }
+}
+
+public void OnClientDisconnect(int client)
+{
+    if (client > 0 && client < sizeof(g_chronobreakPool))
+    {
+        g_chronobreakPool[client].Disable(ChronobreakReason_ClientDisconnect);
+    }
+}
+
+private void Event_PlayerDeath(Event event, char[] name, bool dontBroadcast)
+{
+    int client = GetClientOfUserId(event.GetInt("userid"));
+    if (client > 0 && client < sizeof(g_chronobreakPool))
+    {
+        g_chronobreakPool[client].Disable(ChronobreakReason_ClientDeath);
+    }
+}
+
+private void Event_ResetMap(Event event, char[] name, bool dontBroadcast)
+{
+    for(int index = 0; index < sizeof(g_chronobreakPool); ++index)
+    {
+        g_chronobreakPool[index].Disable(ChronobreakReason_MapReset);
+    }
+}
+
+
+
+private any Native_Chronobreak_GetState(Handle plugin, int numParams)
+{
+    int client = GetNativeCell(1);
+    if (client <= 0 || client >= sizeof(g_chronobreakPool) || !IsClientInGame(client))
+    {
+        ThrowNativeError(SP_ERROR_PARAM, "Invalid client %d.", client);
+    }
+
+    return g_chronobreakPool[client].GetState();
+}
+
+private any Native_Chronobreak_GetUseTime(Handle plugin, int numParams)
+{
+    int client = GetNativeCell(1);
+    if (client <= 0 || client >= sizeof(g_chronobreakPool) || !IsClientInGame(client))
+    {
+        ThrowNativeError(SP_ERROR_PARAM, "Invalid client %d.", client);
+    }
+
+    return g_chronobreakPool[client].GetUseTime();
+}
+
+// private int Native_Chronobreak_GetIntervalBit(Handle plugin, int numParams)
+// {
+//     int client = GetNativeCell(1);
+//     if (client <= 0 || client >= sizeof(g_chronobreakPool) || !IsClientInGame(client))
+//     {
+//         ThrowNativeError(SP_ERROR_PARAM, "Invalid client %d.", client);
+//     }
+
+//     return g_chronobreakPool[client].GetIntervalBit();
+// }
+
+private any Native_Chronobreak_GetPastTime(Handle plugin, int numParams)
+{
+    int client = GetNativeCell(1);
+    if (client <= 0 || client >= sizeof(g_chronobreakPool) || !IsClientInGame(client))
+    {
+        ThrowNativeError(SP_ERROR_PARAM, "Invalid client %d.", client);
+    }
+
+    return g_chronobreakPool[client].GetPastTime();
+}
+
+private any Native_Chronobreak_GetChargingProgress(Handle plugin, int numParams)
+{
+    int client = GetNativeCell(1);
+    if (client <= 0 || client >= sizeof(g_chronobreakPool) || !IsClientInGame(client))
+    {
+        ThrowNativeError(SP_ERROR_PARAM, "Invalid client %d.", client);
+    }
+
+    return g_chronobreakPool[client].GetChargingProgress();
+}
+
+private any Native_Chronobreak_GetlUseProgress(Handle plugin, int numParams)
+{
+    int client = GetNativeCell(1);
+    if (client <= 0 || client >= sizeof(g_chronobreakPool) || !IsClientInGame(client))
+    {
+        ThrowNativeError(SP_ERROR_PARAM, "Invalid client %d.", client);
+    }
+
+    return g_chronobreakPool[client].GetlUseProgress();
+}
+
+private void Native_Chronobreak_Disable(Handle plugin, int numParams)
+{
+    int client = GetNativeCell(1);
+    if (client <= 0 || client >= sizeof(g_chronobreakPool) || !IsClientInGame(client))
+        ThrowNativeError(SP_ERROR_PARAM, "Invalid client %d.", client);
+
+    g_chronobreakPool[client].Disable(ChronobreakReason_CallDisable);
+}
+
+private void Native_Chronobreak_Enable(Handle plugin, int numParams)
+{
+    int client = GetNativeCell(1);
+    if (!IsValidClient(client))
+        ThrowNativeError(SP_ERROR_PARAM, "Invalid client %d.", client);
+
+    if (!IsPlayerAlive(client))
+        ThrowNativeError(SP_ERROR_PARAM, "Client %d is dead.", client);
+
+    if (g_chronobreakPool[client].GetState() != ChronobreakState_Disabled)
+        ThrowNativeError(SP_ERROR_INVALID_INSTRUCTION, "Not in disabled state. (%d)", g_chronobreakPool[client].GetState());
+
+    // float useTime = GetNativeCell(2);
+    // if (FloatCompare(useTime, GetTickInterval()) == -1)
+    //     ThrowNativeError(SP_ERROR_PARAM, "Invalid useTime. (%f)", useTime);
+
+    int factor = GetNativeCell(2);
+    if (factor <= 0)
+        ThrowNativeError(SP_ERROR_PARAM, "Invalid factor. (%d)", factor);
+
+    g_chronobreakPool[client].Enable(client, factor);
+}
+
+private void Native_Chronobreak_Use(Handle plugin, int numParams)
+{
+    int client = GetNativeCell(1);
+    if (client <= 0 || client >= sizeof(g_chronobreakPool) || !IsClientInGame(client))
+    {
+        ThrowNativeError(SP_ERROR_PARAM, "invalid client %d.", client);
+    }
+
+    ChronobreakState state = g_chronobreakPool[client].GetState();
+    switch (state)
+    {
+        case ChronobreakState_Disabled:
+        {
+            ThrowNativeError(SP_ERROR_INVALID_INSTRUCTION, "Disabled.");
+        }
+        case ChronobreakState_Charging:
+        {
+            ThrowNativeError(SP_ERROR_INVALID_INSTRUCTION, "Not yet ready.");
+        }
+        case ChronobreakState_Ready:
+        {
+            g_chronobreakPool[client].Use();
+        }
+        case ChronobreakState_InUse:
+        {
+            ThrowNativeError(SP_ERROR_INVALID_INSTRUCTION, "In using.");
+        }
+        default:
+        {
+            ThrowNativeError(SP_ERROR_NATIVE, "Unknown state. (%d)", state);
+        }
+    }
+}
 
 
 
